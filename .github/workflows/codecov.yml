@@ -12,4 +12,5 @@ jobs:
       - run: npm ci || npm install
       - run: npm test
       - uses: codecov/codecov-action@v5
-        with: { token: ${{ secrets.CODECOV_TOKEN }} }
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
