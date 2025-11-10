@@ -52,8 +52,6 @@ export const listenToDailyUsageAggregate = (childId, dateKey, callback) => {
 
       const data = snapshot.data() || {};
 
-      const data = snapshot.data();
-
       callback?.({
         totalDurationMs: data.totalDurationMs || 0,
         apps: mapAppTotals(data.apps),

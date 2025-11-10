@@ -1,58 +1,74 @@
+/* eslint-env jest */
 // Core mocks for native modules leveraged across tests.
 
-jest.mock('@react-native-firebase/app', () => ({
-  getApp: jest.fn(() => ({ name: 'mock-app' })),
-}));
+jest.mock('@react-native-firebase/app', () => {
+  const mockApp = { name: 'mock-app' };
+  const appFn = jest.fn(() => mockApp);
+  appFn.getApp = jest.fn(() => mockApp);
+  return appFn;
+});
 
-jest.mock('@react-native-firebase/auth', () => ({
-  getAuth: jest.fn(() => ({})),
-}));
+jest.mock('@react-native-firebase/auth', () => {
+  const authInstance = { currentUser: null };
+  const authFn = jest.fn(() => authInstance);
+  return authFn;
+});
 
 jest.mock('@react-native-firebase/firestore', () => {
-  const makeQuery = () => ({
-    where: jest.fn(() => makeQuery()),
-    limit: jest.fn(() => makeQuery()),
-    get: jest.fn(async () => ({ empty: true, docs: [] })),
-  });
+  const collections = new Map();
 
-  const makeDoc = () => ({
-    id: 'mockDocId',
+  const makeQuery = (factory) => {
+    const query = {
+      where: jest.fn(() => query),
+      orderBy: jest.fn(() => query),
+      limit: jest.fn(() => query),
+      onSnapshot: jest.fn((success) => {
+        success?.({ forEach: () => {} });
+        return jest.fn();
+      }),
+      get: jest.fn(async () => ({ empty: true, docs: [] })),
+    };
+    return Object.assign(query, factory(query));
+  };
+
+  const makeDoc = (path) => ({
+    id: path.split('/').pop() || 'mockDocId',
     set: jest.fn(async () => {}),
     update: jest.fn(async () => {}),
-    get: jest.fn(async () => ({ exists: true, data: () => ({}) })),
-    collection: jest.fn(() => makeCollection()),
+    get: jest.fn(async () => ({ exists: false, data: () => ({}) })),
+    collection: jest.fn((child) => getCollection(`${path}/${child}`)),
     ref: { update: jest.fn(async () => {}) },
   });
 
-  const makeCollection = () => ({
-    add: jest.fn(async (payload) => ({ id: 'newMockId', payload })),
-    doc: jest.fn(() => makeDoc()),
-    where: jest.fn(() => makeQuery()),
-    limit: jest.fn(() => makeQuery()),
-    get: jest.fn(async () => ({ empty: true, docs: [] })),
+  const getCollection = (name) => {
+    if (collections.has(name)) {
+      return collections.get(name);
+    }
+
+    const base = makeQuery(() => ({}));
+    base.add = jest.fn(async (payload) => ({ id: `${name}-doc`, payload }));
+    base.doc = jest.fn((id = `${name}-doc`) => makeDoc(`${name}/${id}`));
+    collections.set(name, base);
+    return base;
+  };
+
+  const firestoreInstance = () => ({
+    collection: (path) => getCollection(path),
   });
 
-  const mockDb = {
-    collection: jest.fn(() => makeCollection()),
-    doc: jest.fn(() => makeDoc()),
-  };
-
-  const Timestamp = {
-    fromDate: jest.fn((date) => ({
-      toDate: () => date,
-      seconds: Math.floor(date.getTime() / 1000),
-    })),
-  };
-
-  return {
-    getFirestore: jest.fn(() => mockDb),
-    collection: jest.fn(() => makeCollection()),
-    doc: jest.fn(() => makeDoc()),
-    setDoc: jest.fn(async () => {}),
+  firestoreInstance.FieldValue = {
     serverTimestamp: jest.fn(() => new Date()),
-    increment: jest.fn((value = 0) => value),
-    Timestamp,
+    increment: jest.fn((value = 1) => ({ __increment__: value })),
   };
+  firestoreInstance.Timestamp = {
+    fromDate: (date) => ({
+      toDate: () => date,
+      toMillis: () => date.getTime(),
+      seconds: Math.floor(date.getTime() / 1000),
+    }),
+  };
+
+  return firestoreInstance;
 });
 
 jest.mock('react-native-device-info', () => ({

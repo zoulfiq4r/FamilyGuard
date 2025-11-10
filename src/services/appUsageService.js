@@ -3,40 +3,26 @@ import BackgroundTimer from 'react-native-background-timer';
 import DeviceInfo from 'react-native-device-info';
 
 import { collections, increment, serverTimestamp, Timestamp } from '../config/firebase';
-
-import { collections, firestore } from '../config/firebase';
-
 import { toDateKey } from './appUsageAnalytics';
 
 const { AppUsageModule } = NativeModules;
-
 const isAndroid = Platform.OS === 'android';
+
 let pollingIntervalId = null;
 let childContext = null;
-
 let usageTrackingActive = false;
-
-
 let deviceIdCache = null;
-let lastEventTimestamp = Date.now() - 5 * 60 * 1000; // look back 5 minutes by default
+let lastEventTimestamp = Date.now() - 5 * 60 * 1000;
 let isProcessing = false;
 
-const activeSessions = new Map(); // packageName -> { appName, startTime }
+const activeSessions = new Map();
 const listeners = new Set();
-const usageTotals = new Map(); // packageName -> { packageName, appName, durationMs, sessions }
+const usageTotals = new Map();
 const recentSessions = [];
 let activeApp = null;
+
 let usageTimezone = 'UTC';
-try {
-  if (typeof Intl !== 'undefined' && typeof Intl.DateTimeFormat === 'function') {
-    const resolved = new Intl.DateTimeFormat().resolvedOptions();
-    if (resolved && resolved.timeZone) {
-      usageTimezone = resolved.timeZone;
-    }
-  }
-} catch (error) {
-  console.warn('Failed to detect device timezone', error);
-}
+let zonedFormatter = null;
 let currentDateKey = null;
 
 const createFormatter = (timeZone) => {
@@ -57,7 +43,21 @@ const createFormatter = (timeZone) => {
   }
 };
 
-let zonedFormatter = createFormatter(usageTimezone);
+const initTimezone = () => {
+  try {
+    if (typeof Intl !== 'undefined' && typeof Intl.DateTimeFormat === 'function') {
+      const resolved = new Intl.DateTimeFormat().resolvedOptions();
+      if (resolved?.timeZone) {
+        usageTimezone = resolved.timeZone;
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to detect device timezone', error);
+  }
+  zonedFormatter = createFormatter(usageTimezone);
+};
+
+initTimezone();
 
 const buildSnapshot = () => {
   const totalsArray = Array.from(usageTotals.values()).sort(
@@ -69,29 +69,9 @@ const buildSnapshot = () => {
     totals: totalsArray,
     totalDurationMs,
     dateKey: currentDateKey,
-    recentSessions: [...recentSessions].sort(
-      (a, b) => b.startTimeMs - a.startTimeMs,
-    ),
+    recentSessions: [...recentSessions].sort((a, b) => b.startTimeMs - a.startTimeMs),
     updatedAt: Date.now(),
   };
-};
-
-const ensureCurrentDateKey = (timestampMs = Date.now()) => {
-  const nextKey = formatDateKey(timestampMs);
-  if (currentDateKey === nextKey) {
-    return;
-  }
-  currentDateKey = nextKey;
-  usageTotals.clear();
-  recentSessions.length = 0;
-  const resetStart = timestampMs;
-  activeSessions.forEach((entry, key) => {
-    activeSessions.set(key, {
-      ...entry,
-      startTime: resetStart,
-    });
-  });
-  notifyListeners();
 };
 
 const notifyListeners = () => {
@@ -160,11 +140,30 @@ const updateTotals = (session) => {
     appName: session.appName,
     durationMs: 0,
     sessions: 0,
+    lastUsed: 0,
   };
   existing.durationMs += session.durationMs;
   existing.sessions += 1;
   existing.lastUsed = session.endTimeMs;
   usageTotals.set(session.packageName, existing);
+};
+
+const ensureCurrentDateKey = (timestampMs = Date.now()) => {
+  const nextKey = formatDateKey(timestampMs);
+  if (currentDateKey === nextKey) {
+    return;
+  }
+  currentDateKey = nextKey;
+  usageTotals.clear();
+  recentSessions.length = 0;
+  const resetStart = timestampMs;
+  activeSessions.forEach((entry, key) => {
+    activeSessions.set(key, {
+      ...entry,
+      startTime: resetStart,
+    });
+  });
+  notifyListeners();
 };
 
 const syncSessionToFirestore = async (session) => {
@@ -182,40 +181,17 @@ const syncSessionToFirestore = async (session) => {
     deviceId,
     packageName: session.packageName,
     appName: session.appName,
-
     startTime: Timestamp.fromDate(new Date(session.startTimeMs)),
     endTime: Timestamp.fromDate(new Date(session.endTimeMs)),
     durationMs: session.durationMs,
     durationSeconds: Math.round(session.durationMs / 1000),
     createdAt: serverTimestamp(),
-
-    startTime: firestore.Timestamp.fromDate(new Date(session.startTimeMs)),
-    endTime: firestore.Timestamp.fromDate(new Date(session.endTimeMs)),
-    durationMs: session.durationMs,
-    durationSeconds: Math.round(session.durationMs / 1000),
-    createdAt: firestore.FieldValue.serverTimestamp(),
-
     dateKey: session.dateKey,
     hourBucket: session.hourBucket,
     isOngoing: false,
   };
 
-  try {
-    console.log('📤 Writing app usage session document', {
-      collection: 'appUsageSessions',
-      childId: sessionDoc.childId,
-      packageName: sessionDoc.packageName,
-      durationMs: sessionDoc.durationMs,
-    });
-    const sessionRef = await collections.appUsageSessions.add(sessionDoc);
-    console.log('✅ App usage session stored', {
-      collection: 'appUsageSessions',
-      documentId: sessionRef.id,
-    });
-  } catch (error) {
-    console.error('❌ Failed to write app usage session document', error);
-    throw error;
-  }
+  await collections.appUsageSessions.add(sessionDoc);
 
   const aggregateRef = collections.appUsageAggregates.doc(
     `${childContext.childId}_${session.dateKey}`,
@@ -224,7 +200,6 @@ const syncSessionToFirestore = async (session) => {
     childId: childContext.childId,
     parentId: childContext.parentId,
     dateKey: session.dateKey,
-
     lastUpdated: serverTimestamp(),
     totalDurationMs: increment(session.durationMs),
   };
@@ -235,37 +210,7 @@ const syncSessionToFirestore = async (session) => {
   aggregateUpdate[`apps.${session.packageName}.lastUsed`] = session.endTimeMs;
   aggregateUpdate[`hours.${session.hourBucket}`] = increment(session.durationMs);
 
-    lastUpdated: firestore.FieldValue.serverTimestamp(),
-    totalDurationMs: firestore.FieldValue.increment(session.durationMs),
-  };
-  aggregateUpdate[`apps.${session.packageName}.packageName`] = session.packageName;
-  aggregateUpdate[`apps.${session.packageName}.appName`] = session.appName;
-  aggregateUpdate[`apps.${session.packageName}.durationMs`] = firestore.FieldValue.increment(
-    session.durationMs,
-  );
-  aggregateUpdate[`apps.${session.packageName}.sessions`] = firestore.FieldValue.increment(1);
-  aggregateUpdate[`apps.${session.packageName}.lastUsed`] = session.endTimeMs;
-  aggregateUpdate[`hours.${session.hourBucket}`] = firestore.FieldValue.increment(
-    session.durationMs,
-  );
-
-
-  try {
-    console.log('📤 Updating aggregated usage document', {
-      collection: 'appUsageAggregates',
-      documentId: `${childContext.childId}_${session.dateKey}`,
-      packageName: session.packageName,
-      durationMsIncrement: session.durationMs,
-    });
-    await aggregateRef.set(aggregateUpdate, { merge: true });
-    console.log('✅ Aggregated usage updated', {
-      collection: 'appUsageAggregates',
-      documentId: `${childContext.childId}_${session.dateKey}`,
-    });
-  } catch (error) {
-    console.error('❌ Failed to update aggregated usage document', error);
-    throw error;
-  }
+  await aggregateRef.set(aggregateUpdate, { merge: true });
 
   const appDocRef = collections.children
     .doc(childContext.childId)
@@ -275,31 +220,11 @@ const syncSessionToFirestore = async (session) => {
   const childAppUpdate = {
     name: session.appName,
     packageName: session.packageName,
-
     usageMinutes: increment(usageMinutesIncrement),
     isBlocked: false,
     updatedAt: serverTimestamp(),
-
-    usageMinutes: firestore.FieldValue.increment(usageMinutesIncrement),
-    isBlocked: false,
-    updatedAt: firestore.FieldValue.serverTimestamp(),
-
   };
-
-  try {
-    console.log('📤 Upserting child app usage document', {
-      path: `children/${childContext.childId}/apps/${session.packageName}`,
-      name: session.appName,
-      usageMinutesIncrement: Number(usageMinutesIncrement.toFixed(3)),
-    });
-    await appDocRef.set(childAppUpdate, { merge: true });
-    console.log('✅ Child app usage document updated', {
-      path: `children/${childContext.childId}/apps/${session.packageName}`,
-    });
-  } catch (error) {
-    console.error('❌ Failed to upsert child app usage document', error);
-    throw error;
-  }
+  await appDocRef.set(childAppUpdate, { merge: true });
 };
 
 const updateDeviceCurrentApp = async (appInfo) => {
@@ -310,19 +235,11 @@ const updateDeviceCurrentApp = async (appInfo) => {
         ? {
             packageName: appInfo.packageName,
             appName: appInfo.appName,
-
             since: Timestamp.fromDate(new Date(appInfo.since)),
             updatedAt: serverTimestamp(),
           }
         : null,
       lastUsageHeartbeat: serverTimestamp(),
-
-            since: firestore.Timestamp.fromDate(new Date(appInfo.since)),
-            updatedAt: firestore.FieldValue.serverTimestamp(),
-          }
-        : null,
-      lastUsageHeartbeat: firestore.FieldValue.serverTimestamp(),
-
     },
     { merge: true },
   );
@@ -442,12 +359,9 @@ export const startAppUsageTracking = async (context) => {
     return false;
   }
 
-
   if (usageTrackingActive && childContext?.childId === context.childId) {
     return true;
   }
-
-
 
   ensureCurrentDateKey(Date.now());
 
@@ -471,16 +385,12 @@ export const startAppUsageTracking = async (context) => {
   pollingIntervalId = BackgroundTimer.setInterval(pollUsageStats, 30_000);
 
   usageTrackingActive = true;
-
-
   console.log('📱 App usage tracking started');
   return true;
 };
 
 export const stopAppUsageTracking = () => {
-
   const wasTracking = usageTrackingActive || Boolean(pollingIntervalId);
-
 
   if (pollingIntervalId) {
     BackgroundTimer.clearInterval(pollingIntervalId);
@@ -498,9 +408,6 @@ export const stopAppUsageTracking = () => {
   if (wasTracking) {
     console.log('📱 App usage tracking stopped');
   }
-
-  console.log('📱 App usage tracking stopped');
-
 };
 
 export const subscribeToLocalUsageState = (callback) => {
@@ -519,10 +426,7 @@ export const subscribeToLocalUsageState = (callback) => {
 };
 
 export const setUsageTimezone = (timeZone) => {
-  if (!timeZone || typeof timeZone !== 'string') {
-    return;
-  }
-  if (usageTimezone === timeZone) {
+  if (!timeZone || typeof timeZone !== 'string' || usageTimezone === timeZone) {
     return;
   }
   usageTimezone = timeZone;
