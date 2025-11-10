@@ -1,7 +1,10 @@
 import { NativeModules, Platform } from 'react-native';
 import { subscribeToAppControls } from './appControlsService';
 import { subscribeToLocalUsageState, setUsageTimezone } from './appUsageService';
+<<<<<<< HEAD
 import { collections, serverTimestamp } from '../config/firebase';
+=======
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
 
 const { AppBlockerModule } = NativeModules;
 
@@ -10,6 +13,7 @@ const DEFAULT_MESSAGES = {
   dailyLimit: 'Daily Limit Reached',
 };
 
+<<<<<<< HEAD
 const REMOTE_BLOCK_REASON = 'remoteBlock';
 const TELEMETRY_UNKNOWN_METHOD = 'unknown';
 
@@ -17,6 +21,11 @@ let enforcementContext = null;
 let controlsUnsubscribe = null;
 let usageUnsubscribe = null;
 let appStatusUnsubscribe = null;
+=======
+let enforcementContext = null;
+let controlsUnsubscribe = null;
+let usageUnsubscribe = null;
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
 let currentControls = {
   meta: {
     globalDailyLimitMillis: null,
@@ -27,9 +36,12 @@ let currentControls = {
 };
 let latestUsageSnapshot = null;
 let lastPayloadHash = null;
+<<<<<<< HEAD
 let remoteAppBlocks = new Map();
 let remoteBlockConfirmations = new Map();
 let lastEnforcementMethod = TELEMETRY_UNKNOWN_METHOD;
+=======
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
 
 const nativeModuleAvailable = () => !!AppBlockerModule && Platform.OS === 'android';
 
@@ -55,13 +67,17 @@ const resetState = () => {
   };
   latestUsageSnapshot = null;
   lastPayloadHash = null;
+<<<<<<< HEAD
   remoteAppBlocks = new Map();
   remoteBlockConfirmations = new Map();
   lastEnforcementMethod = TELEMETRY_UNKNOWN_METHOD;
+=======
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
 };
 
 const hashPayload = (payload) => JSON.stringify(payload);
 
+<<<<<<< HEAD
 const normalizeTimestamp = (value) => {
   if (!value) return null;
   if (typeof value.toMillis === 'function') {
@@ -203,6 +219,13 @@ const confirmRemoteBlocks = async (method) => {
 
 const evaluateBlocking = async () => {
   if (!nativeModuleAvailable() || !enforcementContext?.childId) {
+=======
+const evaluateBlocking = () => {
+  if (!nativeModuleAvailable()) {
+    return;
+  }
+  if (!enforcementContext?.childId) {
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
     return;
   }
 
@@ -225,6 +248,7 @@ const evaluateBlocking = async () => {
     },
   };
 
+<<<<<<< HEAD
   let hasActiveBlock = false;
 
   remoteAppBlocks.forEach((block, packageName) => {
@@ -241,6 +265,12 @@ const evaluateBlocking = async () => {
 
   Object.entries(currentControls.apps || {}).forEach(([packageName, rule]) => {
     if (!packageName || payload.apps[packageName]?.active) {
+=======
+  let blockChanged = false;
+
+  Object.entries(currentControls.apps || {}).forEach(([packageName, rule]) => {
+    if (!packageName) {
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
       return;
     }
     const usageMs = usageByPackage.get(packageName) || 0;
@@ -261,7 +291,11 @@ const evaluateBlocking = async () => {
       reason: isBlocked ? 'blocked' : 'dailyLimit',
       message: isBlocked ? DEFAULT_MESSAGES.blocked : DEFAULT_MESSAGES.dailyLimit,
     };
+<<<<<<< HEAD
     hasActiveBlock = true;
+=======
+    blockChanged = true;
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
   });
 
   const globalLimit = currentControls.meta?.globalDailyLimitMillis;
@@ -275,7 +309,11 @@ const evaluateBlocking = async () => {
       reason: 'dailyLimit',
       message: DEFAULT_MESSAGES.dailyLimit,
     };
+<<<<<<< HEAD
     hasActiveBlock = true;
+=======
+    blockChanged = true;
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
   } else {
     payload.global = {
       active: false,
@@ -285,6 +323,7 @@ const evaluateBlocking = async () => {
   }
 
   const payloadHash = hashPayload(payload);
+<<<<<<< HEAD
 
   if (!hasActiveBlock) {
     if (lastPayloadHash !== null) {
@@ -298,6 +337,10 @@ const evaluateBlocking = async () => {
       }
     }
     return;
+=======
+  if (!blockChanged && !Object.keys(payload.apps).length) {
+    payload.apps = {};
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
   }
 
   if (payloadHash === lastPayloadHash) {
@@ -306,6 +349,7 @@ const evaluateBlocking = async () => {
 
   lastPayloadHash = payloadHash;
   try {
+<<<<<<< HEAD
     let method = lastEnforcementMethod;
     if (AppBlockerModule?.updateBlockRules) {
       const result = await AppBlockerModule.updateBlockRules(payload);
@@ -315,6 +359,9 @@ const evaluateBlocking = async () => {
       }
     }
     await confirmRemoteBlocks(method);
+=======
+    AppBlockerModule.updateBlockRules?.(payload);
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
   } catch (error) {
     console.error('Failed to update native blocker rules', error);
   }
@@ -347,9 +394,12 @@ export const startAppEnforcement = (context) => {
     return;
   }
 
+<<<<<<< HEAD
   controlsUnsubscribe?.();
   usageUnsubscribe?.();
   appStatusUnsubscribe?.();
+=======
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
   resetState();
 
   controlsUnsubscribe = subscribeToAppControls(
@@ -359,7 +409,10 @@ export const startAppEnforcement = (context) => {
   );
 
   usageUnsubscribe = subscribeToLocalUsageState(handleUsageUpdate);
+<<<<<<< HEAD
   appStatusUnsubscribe = subscribeToRemoteAppStatus(enforcementContext.childId);
+=======
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
 };
 
 export const stopAppEnforcement = () => {
@@ -368,10 +421,15 @@ export const stopAppEnforcement = () => {
   }
   controlsUnsubscribe?.();
   usageUnsubscribe?.();
+<<<<<<< HEAD
   appStatusUnsubscribe?.();
   controlsUnsubscribe = null;
   usageUnsubscribe = null;
   appStatusUnsubscribe = null;
+=======
+  controlsUnsubscribe = null;
+  usageUnsubscribe = null;
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
   enforcementContext = null;
   if (nativeModuleAvailable()) {
     try {

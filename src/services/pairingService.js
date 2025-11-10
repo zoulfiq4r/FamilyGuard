@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { collections, serverTimestamp } from '../config/firebase';
 import DeviceInfo from 'react-native-device-info';
 
@@ -10,6 +11,21 @@ export const validateAndPairDevice = async (pairingCode) => {
   try {
     console.log('🔍 Validating pairing code:', pairingCode);
 
+=======
+import { collections } from '../config/firebase';
+import firestore from '@react-native-firebase/firestore';
+import DeviceInfo from 'react-native-device-info';
+
+/**
+ * Validates a pairing code and pairs the device with a child
+ * @param {string} pairingCode - The 6-digit pairing code
+ * @returns {Promise<{success: boolean, childId: string, childName: string}>}
+ */
+export const validateAndPairDevice = async (pairingCode) => {
+  try {
+    console.log('🔍 Validating pairing code:', pairingCode);
+
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
     // Query pairingCodes collection using the code (some docs may not have isUsed field yet)
     const pairingCodesSnapshot = await collections.pairingCodes
       .where('code', '==', pairingCode)
@@ -41,7 +57,11 @@ export const validateAndPairDevice = async (pairingCode) => {
           const childData = childSnapshot.exists ? childSnapshot.data() : {};
 
           await existingDeviceDoc.ref.update({
+<<<<<<< HEAD
             lastSeen: serverTimestamp(),
+=======
+            lastSeen: firestore.FieldValue.serverTimestamp(),
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
             isActive: true,
           });
 
@@ -63,6 +83,7 @@ export const validateAndPairDevice = async (pairingCode) => {
 
       throw new Error('This pairing code has already been used');
     }
+<<<<<<< HEAD
 
     // Check if code is expired (10 minutes = 600000 ms)
     const createdAt = pairingData.createdAt?.toMillis?.() || 
@@ -166,3 +187,108 @@ export const validateAndPairDevice = async (pairingCode) => {
     }
   }
 };
+=======
+
+    // Check if code is expired (10 minutes = 600000 ms)
+    const createdAt = pairingData.createdAt?.toMillis?.() || 
+                      (pairingData.createdAt?.seconds ? pairingData.createdAt.seconds * 1000 : null) ||
+                      pairingData.timestamp?.toMillis?.() ||
+                      (pairingData.timestamp?.seconds ? pairingData.timestamp.seconds * 1000 : null);
+    const now = Date.now();
+    const tenMinutes = 10 * 60 * 1000; // 10 minutes in milliseconds
+
+    if (!createdAt || (now - createdAt > tenMinutes)) {
+      throw new Error('Pairing code has expired. Please generate a new code.');
+    }
+
+    // Get parentId and childName from pairing code document (STEP 2)
+    const parentId = pairingData.parentId;
+    const childName = pairingData.childName;
+
+    console.log('🔍 Extracted data:', { parentId, childName });
+
+    // Validate required fields
+    if (!parentId) {
+      console.error('❌ Missing parentId in pairing code. Available fields:', Object.keys(pairingData));
+      throw new Error('Invalid pairing code. Missing parentId.');
+    }
+
+    if (!childName) {
+      console.error('❌ Missing childName in pairing code. Available fields:', Object.keys(pairingData));
+      throw new Error('Invalid pairing code. Missing childName.');
+    }
+
+    // Mark code as used (STEP 3)
+    console.log('📝 Marking pairing code as used...');
+    await pairingDoc.ref.update({ 
+      isUsed: true,
+      usedAt: firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Create child document (STEP 4 - REQUIRED)
+    console.log('👤 Creating child document...');
+    const newChildRef = await collections.children.add({
+      parentId: parentId,  // MUST match the parentId shown in console
+      name: childName,
+      createdAt: firestore.FieldValue.serverTimestamp(),
+      isPaired: false,
+    });
+
+    const childId = newChildRef.id;
+    console.log('✅ Created child document:', childId, { parentId, childName });
+
+    // Get device information
+    const deviceName = await DeviceInfo.getDeviceName();
+    const deviceModel = await DeviceInfo.getModel();
+    const deviceBrand = await DeviceInfo.getBrand();
+
+    // Create or update device entry
+    const deviceRef = collections.devices.doc(deviceId);
+    await deviceRef.set({
+      deviceId,
+      childId,
+      parentId,
+      deviceName,
+      deviceModel,
+      deviceBrand,
+      pairedAt: firestore.FieldValue.serverTimestamp(),
+      lastSeen: firestore.FieldValue.serverTimestamp(),
+      isActive: true,
+      platform: DeviceInfo.getSystemName(),
+      version: await DeviceInfo.getVersion(),
+    }, { merge: true });
+
+    // Update child document to include this device
+    await collections.children.doc(childId).update({
+      deviceId,
+      deviceName,
+      lastPaired: firestore.FieldValue.serverTimestamp(),
+      isPaired: true,
+    });
+
+    console.log('✅ Device paired successfully:', {
+      deviceId,
+      childId,
+      childName: childName,
+      parentId: parentId,
+    });
+
+    return {
+      success: true,
+      childId,
+      childName: childName,
+      deviceId,
+      parentId,
+    };
+  } catch (error) {
+    console.error('❌ Pairing error:', error);
+    
+    // Re-throw with a user-friendly message if it's not already an Error object
+    if (error instanceof Error) {
+      throw error;
+    } else {
+      throw new Error('Failed to pair device. Please try again.');
+    }
+  }
+};
+>>>>>>> 7f95f45defbe90a36bc7cd4d1d2d2ea069505c82
