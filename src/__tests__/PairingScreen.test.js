@@ -1,8 +1,8 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import PairingScreen from '../screens/PairingScreen';
 
 jest.mock('react-native/Libraries/Alert/Alert', () => ({ alert: jest.fn() }));
-import PairingScreen from '../screens/PairingScreen';
 
 jest.mock('../services/pairingService', () => ({
   validateAndPairDevice: jest.fn(async () => ({ success: true, childId: 'cid', childName: 'Alex', deviceId: 'device-123', parentId: 'pid' })),
