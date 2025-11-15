@@ -1,1 +1,6 @@
 [![codecov](https://codecov.io/gh/zoulfiq4r/FamilyGuardMobile/graph/badge.svg?token=WKJPNFXX9H)](https://codecov.io/gh/zoulfiq4r/FamilyGuardMobile)
+![Status](https://img.shields.io/badge/Status-Active-brightgreen)
+![Platform](https://img.shields.io/badge/Platform-Android-green?logo=android)
+![React Native](https://img.shields.io/badge/React_Native-20232A?logo=react&logoColor=61DAFB)
+![Firebase](https://img.shields.io/badge/Firebase-039BE5?logo=firebase)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript)
