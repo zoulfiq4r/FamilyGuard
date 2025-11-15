@@ -51,9 +51,14 @@ export default function BlockAppsScreen({ onBack, childContext }) {
 
         // Also get apps from local usage as fallback
         const localApps = await getAppsFromLocalUsage();
-        if (localApps.length > 0 && apps.length === 0) {
-          setApps(localApps);
-          setLoading(false);
+        if (localApps.length > 0) {
+          setApps((prev) => {
+            if (prev.length === 0) {
+              setLoading(false);
+              return localApps;
+            }
+            return prev;
+          });
         }
       } catch (error) {
         console.error('Failed to load apps', error);
@@ -281,6 +286,7 @@ export default function BlockAppsScreen({ onBack, childContext }) {
                       <ActivityIndicator size="small" color="#2563EB" />
                     ) : (
                       <Switch
+                        testID={`block-switch-${app.packageName}`}
                         value={isBlocked}
                         onValueChange={() => handleToggleBlock(app.packageName, isBlocked)}
                         trackColor={{ false: '#D1D5DB', true: '#EF4444' }}

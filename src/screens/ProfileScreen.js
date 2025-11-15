@@ -15,6 +15,7 @@ export default function ProfileScreen({ onBack }) {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 <View style={styles.header}>
   <TouchableOpacity
+    testID="profile-back-button"
     style={styles.backButton}
     onPress={onBack}
     activeOpacity={0.7}
