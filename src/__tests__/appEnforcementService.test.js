@@ -56,6 +56,7 @@ jest.mock('../config/firebase', () => ({
   serverTimestamp: mockServerTimestamp,
 }));
 
+
 const mockAppBlockerModule = {
   updateBlockRules: jest.fn(async () => 'nativeMethod'),
   clearBlockRules: jest.fn(),

@@ -1,12 +1,20 @@
-import firebaseApp from '@react-native-firebase/app';
-import authModule from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
+import { getApp } from '@react-native-firebase/app';
+import { getAuth } from '@react-native-firebase/auth';
+import {
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  serverTimestamp as firestoreServerTimestamp,
+  increment as firestoreIncrement,
+  Timestamp,
+} from '@react-native-firebase/firestore';
 
-const app = firebaseApp();
-const auth = authModule(app);
-const db = firestore(app);
+const app = getApp();
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-const buildCollection = (name) => db.collection(name);
+const buildCollection = (name) => collection(db, name);
 
 export const collections = {
   users: buildCollection('users'),
@@ -21,9 +29,9 @@ export const collections = {
   appUsageAggregates: buildCollection('appUsageAggregates'),
 };
 
-export const serverTimestamp = () => firestore.FieldValue.serverTimestamp();
-export const increment = (value = 1) => firestore.FieldValue.increment(value);
-export const Timestamp = firestore.Timestamp;
+export const serverTimestamp = () => firestoreServerTimestamp();
+export const increment = (value = 1) => firestoreIncrement(value);
+export { Timestamp };
 
 export const generatePairingCode = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
@@ -31,7 +39,8 @@ export const generatePairingCode = () =>
 export const testFirebaseConnection = async () => {
   try {
     console.log('🔥 Testing Firebase connection...');
-    await db.collection('test').doc('connection').set({
+    const connectionDoc = doc(buildCollection('test'), 'connection');
+    await setDoc(connectionDoc, {
       timestamp: serverTimestamp(),
       message: 'Firebase connected successfully from React Native!',
       device: 'Android',
@@ -44,4 +53,4 @@ export const testFirebaseConnection = async () => {
   }
 };
 
-export { app, auth, db, firestore };
+export { app, auth, db };

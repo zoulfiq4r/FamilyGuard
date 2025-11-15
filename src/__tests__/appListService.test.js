@@ -17,6 +17,13 @@ jest.mock('../config/firebase', () => ({
   },
 }));
 
+jest.mock('@react-native-firebase/firestore', () => ({
+  doc: jest.fn((collectionRef, id) => collectionRef.doc(id)),
+  collection: jest.fn((docRef, path) => docRef.collection(path)),
+  getDocs: jest.fn((collectionRef) => collectionRef.get()),
+  onSnapshot: jest.fn((ref, success, error) => ref.onSnapshot(success, error)),
+}));
+
 jest.mock('../services/appUsageService', () => ({
   subscribeToLocalUsageState: jest.fn(),
 }));

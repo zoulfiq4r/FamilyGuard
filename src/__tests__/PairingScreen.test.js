@@ -12,13 +12,11 @@ jest.mock('../services/pairingService', () => ({
   })),
 }));
 
-const RNAlert = require('react-native/Libraries/Alert/Alert');
 const { validateAndPairDevice } = require('../services/pairingService');
 
 describe('PairingScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    RNAlert.alert.mockReset();
   });
 
   test('keeps connect button disabled until all digits are filled', () => {
@@ -38,9 +36,6 @@ describe('PairingScreen', () => {
   });
 
   test('enters code and triggers onPaired on success', async () => {
-    RNAlert.alert.mockImplementation((_title, _msg, buttons) => {
-      buttons?.[0]?.onPress?.();
-    });
     const onPaired = jest.fn();
     const { getByTestId } = render(<PairingScreen onPaired={onPaired} />);
 
@@ -60,12 +55,12 @@ describe('PairingScreen', () => {
     await waitFor(() => expect(onPaired).toHaveBeenCalled());
   });
 
-  test('shows error alert and clears code when pairing fails', async () => {
+  test('shows inline error message and clears code when pairing fails', async () => {
     const error = new Error('Invalid code');
     validateAndPairDevice.mockRejectedValueOnce(error);
 
     const onPaired = jest.fn();
-    const { getByTestId } = render(<PairingScreen onPaired={onPaired} />);
+    const { getByTestId, findByTestId } = render(<PairingScreen onPaired={onPaired} />);
 
     const inputs = [0, 1, 2, 3, 4, 5].map((i) => getByTestId(`code-input-${i}`));
     const digits = ['1', '2', '3', '4', '5', '6'];
@@ -78,9 +73,8 @@ describe('PairingScreen', () => {
 
     fireEvent.press(getByTestId('connect-button'));
 
-    await waitFor(() =>
-      expect(RNAlert.alert).toHaveBeenCalledWith('Pairing Failed', error.message, [{ text: 'OK' }]),
-    );
+    const statusMessage = await findByTestId('pairing-status');
+    expect(statusMessage.props.children).toBe(error.message);
     inputs.forEach((input) => {
       expect(input.props.value).toBe('');
     });

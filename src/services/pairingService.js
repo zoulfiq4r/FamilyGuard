@@ -1,4 +1,16 @@
 import DeviceInfo from 'react-native-device-info';
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit as limitQuery,
+  query,
+  setDoc,
+  updateDoc,
+  where,
+} from '@react-native-firebase/firestore';
 import { collections, serverTimestamp } from '../config/firebase';
 
 const PAIRING_EXPIRY_MS = 10 * 60 * 1000;
@@ -33,10 +45,9 @@ export const validateAndPairDevice = async (pairingCode) => {
 
     console.log('🔍 Validating pairing code:', pairingCode);
 
-    const pairingCodesSnapshot = await collections.pairingCodes
-      .where('code', '==', pairingCode)
-      .limit(1)
-      .get();
+    const pairingCodesSnapshot = await getDocs(
+      query(collections.pairingCodes, where('code', '==', pairingCode), limitQuery(1)),
+    );
 
     if (pairingCodesSnapshot.empty) {
       throw new Error('Invalid pairing code. Please check the code and try again.');
@@ -47,18 +58,18 @@ export const validateAndPairDevice = async (pairingCode) => {
     const deviceId = await DeviceInfo.getUniqueId();
 
     const markDeviceHeartbeat = async (deviceDoc) => {
-      await deviceDoc.ref.update({
+      await updateDoc(deviceDoc.ref, {
         lastSeen: serverTimestamp(),
         isActive: true,
       });
     };
 
     if (pairingData.isUsed || pairingData.used) {
-      const existingDeviceDoc = await collections.devices.doc(deviceId).get();
+      const existingDeviceDoc = await getDoc(doc(collections.devices, deviceId));
       if (existingDeviceDoc.exists) {
         const existingDevice = existingDeviceDoc.data() || {};
         if (existingDevice.childId) {
-          const childSnapshot = await collections.children.doc(existingDevice.childId).get();
+          const childSnapshot = await getDoc(doc(collections.children, existingDevice.childId));
           const childData = childSnapshot.exists ? childSnapshot.data() : {};
           await markDeviceHeartbeat(existingDeviceDoc);
           return {
@@ -85,12 +96,12 @@ export const validateAndPairDevice = async (pairingCode) => {
     assertField(parentId, 'parentId');
     assertField(childName, 'childName');
 
-    await pairingDoc.ref.update({
+    await updateDoc(pairingDoc.ref, {
       isUsed: true,
       usedAt: serverTimestamp(),
     });
 
-    const childRef = await collections.children.add({
+    const childRef = await addDoc(collections.children, {
       parentId,
       name: childName,
       createdAt: serverTimestamp(),
@@ -106,8 +117,9 @@ export const validateAndPairDevice = async (pairingCode) => {
       DeviceInfo.getVersion(),
     ]);
 
-    const deviceRef = collections.devices.doc(deviceId);
-    await deviceRef.set(
+    const deviceRef = doc(collections.devices, deviceId);
+    await setDoc(
+      deviceRef,
       {
         deviceId,
         childId,
@@ -124,7 +136,7 @@ export const validateAndPairDevice = async (pairingCode) => {
       { merge: true },
     );
 
-    await collections.children.doc(childId).update({
+    await updateDoc(doc(collections.children, childId), {
       deviceId,
       deviceName,
       lastPaired: serverTimestamp(),
@@ -151,5 +163,47 @@ export const validateAndPairDevice = async (pairingCode) => {
       throw error;
     }
     throw new Error('Failed to pair device. Please try again.');
+  }
+};
+
+export const fetchExistingDevicePairing = async () => {
+  try {
+    const deviceId = await DeviceInfo.getUniqueId();
+    const deviceRef = doc(collections.devices, deviceId);
+    const deviceSnapshot = await getDoc(deviceRef);
+
+    if (!deviceSnapshot.exists) {
+      return null;
+    }
+
+    const deviceData = deviceSnapshot.data() || {};
+    if (!deviceData.childId) {
+      return null;
+    }
+
+    let childName = deviceData.childName;
+    if (!childName) {
+      const childSnapshot = await getDoc(doc(collections.children, deviceData.childId));
+      if (childSnapshot.exists) {
+        const childData = childSnapshot.data() || {};
+        childName = childData.name || childName;
+      }
+    }
+
+    await updateDoc(deviceRef, {
+      lastSeen: serverTimestamp(),
+      isActive: true,
+    });
+
+    return {
+      success: true,
+      deviceId,
+      childId: deviceData.childId,
+      childName,
+      parentId: deviceData.parentId,
+    };
+  } catch (error) {
+    console.error('❌ Pairing restore error:', error);
+    return null;
   }
 };

@@ -3,6 +3,7 @@ import BackgroundTimer from 'react-native-background-timer';
 import DeviceInfo from 'react-native-device-info';
 import { PermissionsAndroid, Platform, Alert } from 'react-native';
 
+import { addDoc, collection, doc, setDoc } from '@react-native-firebase/firestore';
 import { collections, serverTimestamp } from '../config/firebase';
 
 let locationInterval = null;
@@ -123,18 +124,22 @@ export const sendLocationUpdate = async (childId) => {
       isMockLocation: isMock,
     };
 
-    await collections.locations.add(locationPayload);
+    await addDoc(collections.locations, locationPayload);
 
-    const childDocRef = collections.children.doc(childId);
-    await childDocRef.collection('locations').add({
-      latitude,
-      longitude,
-      accuracy,
-      timestamp,
-      deviceId,
-    });
+    const childDocRef = doc(collections.children, childId);
+    await addDoc(
+      collection(childDocRef, 'locations'),
+      {
+        latitude,
+        longitude,
+        accuracy,
+        timestamp,
+        deviceId,
+      },
+    );
 
-    await childDocRef.set(
+    await setDoc(
+      childDocRef,
       {
         currentLocation: {
           latitude,
@@ -151,6 +156,7 @@ export const sendLocationUpdate = async (childId) => {
         },
         lastSeen: serverTimestamp(),
       },
+      { merge: true },
       { merge: true },
     );
 

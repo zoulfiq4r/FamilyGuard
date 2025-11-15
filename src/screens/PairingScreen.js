@@ -1,12 +1,10 @@
-
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { validateAndPairDevice } from '../services/pairingService';
@@ -14,24 +12,29 @@ import { validateAndPairDevice } from '../services/pairingService';
 export default function PairingScreen({ onPaired }) {
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState(null);
   const inputRefs = useRef([]);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const handleCodeChange = (text, index) => {
-    // Only allow numbers
     if (text && !/^\d+$/.test(text)) return;
 
     const newCode = [...code];
     newCode[index] = text;
     setCode(newCode);
 
-    // Auto-focus next input
     if (text && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
   const handleKeyPress = (e, index) => {
-    // Handle backspace
     if (e.nativeEvent.key === 'Backspace' && !code[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
@@ -41,30 +44,23 @@ export default function PairingScreen({ onPaired }) {
     const pairingCode = code.join('');
 
     if (pairingCode.length !== 6) {
-      Alert.alert('Error', 'Please enter a complete 6-digit code');
+      setStatus({ type: 'error', message: 'Please enter a complete 6-digit code.' });
       return;
     }
 
     setLoading(true);
+    setStatus(null);
 
     try {
       const result = await validateAndPairDevice(pairingCode);
-      
-      Alert?.alert && Alert.alert(
-        'Success! 🎉',
-        `Device paired successfully!\nWelcome, ${result.childName}!`,
-        [{ 
-          text: 'Continue', 
-          onPress: () => onPaired(result)  // Pass the result object
-        }]
-      );
+      if (isMountedRef.current) {
+        onPaired(result);
+      }
     } catch (error) {
-      Alert?.alert && Alert.alert(
-        'Pairing Failed',
-        error.message || 'Invalid or expired pairing code. Please try again.',
-        [{ text: 'OK' }],
-      );
-      // Clear code on error
+      setStatus({
+        type: 'error',
+        message: error.message || 'Invalid or expired pairing code. Please try again.',
+      });
       setCode(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
     } finally {
@@ -72,7 +68,7 @@ export default function PairingScreen({ onPaired }) {
     }
   };
 
-  const isCodeComplete = code.every(digit => digit !== '');
+  const isCodeComplete = code.every((digit) => digit !== '');
 
   return (
     <View style={styles.container}>
@@ -90,15 +86,12 @@ export default function PairingScreen({ onPaired }) {
         {code.map((digit, index) => (
           <TextInput
             key={index}
-            ref={ref => (inputRefs.current[index] = ref)}
-            style={[
-              styles.codeInput,
-              digit && styles.codeInputFilled,
-            ]}
+            ref={(ref) => (inputRefs.current[index] = ref)}
+            style={[styles.codeInput, digit && styles.codeInputFilled]}
             testID={`code-input-${index}`}
             value={digit}
-            onChangeText={text => handleCodeChange(text, index)}
-            onKeyPress={e => handleKeyPress(e, index)}
+            onChangeText={(text) => handleCodeChange(text, index)}
+            onKeyPress={(e) => handleKeyPress(e, index)}
             keyboardType="number-pad"
             maxLength={1}
             selectTextOnFocus
@@ -129,6 +122,18 @@ export default function PairingScreen({ onPaired }) {
           The pairing code expires after 10 minutes for security
         </Text>
       </View>
+
+      {status?.message && (
+        <Text
+          testID="pairing-status"
+          style={[
+            styles.statusMessage,
+            status.type === 'error' ? styles.statusError : styles.statusSuccess,
+          ]}
+        >
+          {status.message}
+        </Text>
+      )}
     </View>
   );
 }
@@ -203,30 +208,41 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   connectButtonDisabled: {
-    backgroundColor: '#CBD5E1',
+    backgroundColor: '#93C5FD',
     shadowOpacity: 0,
-    elevation: 0,
   },
   connectButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   infoBox: {
     flexDirection: 'row',
-    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    backgroundColor: '#E0F2FE',
     padding: 16,
     borderRadius: 12,
-    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
   },
   infoIcon: {
     fontSize: 20,
     marginRight: 12,
   },
   infoText: {
-    flex: 1,
     fontSize: 14,
-    color: '#92400E',
+    color: '#475569',
+  },
+  statusMessage: {
+    marginTop: 16,
+    textAlign: 'center',
+    fontSize: 14,
+  },
+  statusError: {
+    color: '#DC2626',
+  },
+  statusSuccess: {
+    color: '#0F9D58',
   },
 });
-

@@ -81,6 +81,7 @@ jest.mock('../config/firebase', () => {
   return { collections: { locations, children }, serverTimestamp };
 });
 
+
 jest.mock('react-native-device-info', () => ({ getUniqueId: jest.fn(async () => 'device-abc') }));
 
 import Geolocation from '@react-native-community/geolocation';

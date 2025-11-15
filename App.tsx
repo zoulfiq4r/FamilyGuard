@@ -13,6 +13,7 @@ import BlockAppsScreen from './src/screens/BlockAppsScreen';
 import { testFirebaseConnection } from './src/config/firebase';
 import { startLocationTracking, stopLocationTracking } from './src/services/locationService';
 import { refreshForegroundApp, startAppUsageTracking, stopAppUsageTracking } from './src/services/appUsageService';
+import { fetchExistingDevicePairing } from './src/services/pairingService';
 import {
   getBlockerPermissionsStatus,
   openAccessibilitySettings,
@@ -216,9 +217,26 @@ function App() {
             parentId: storedContext.parentId,
             childName: storedContext.childName,
           });
-        } else {
-          setCurrentScreen('pairing');
+          return;
         }
+
+        const restoredContext = await fetchExistingDevicePairing();
+
+        if (!isActive) {
+          return;
+        }
+
+        if (restoredContext?.childId) {
+          await handlePaired({
+            success: true,
+            childId: restoredContext.childId,
+            parentId: restoredContext.parentId,
+            childName: restoredContext.childName,
+          });
+          return;
+        }
+
+        setCurrentScreen('pairing');
       } catch (error) {
         console.warn('Failed to restore pairing data', error);
         if (isActive) {

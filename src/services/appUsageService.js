@@ -2,6 +2,7 @@ import { NativeModules, Platform } from 'react-native';
 import BackgroundTimer from 'react-native-background-timer';
 import DeviceInfo from 'react-native-device-info';
 
+import { addDoc, collection, doc, setDoc } from '@react-native-firebase/firestore';
 import { collections, increment, serverTimestamp, Timestamp } from '../config/firebase';
 import { toDateKey } from './appUsageAnalytics';
 
@@ -191,9 +192,10 @@ const syncSessionToFirestore = async (session) => {
     isOngoing: false,
   };
 
-  await collections.appUsageSessions.add(sessionDoc);
+  await addDoc(collections.appUsageSessions, sessionDoc);
 
-  const aggregateRef = collections.appUsageAggregates.doc(
+  const aggregateRef = doc(
+    collections.appUsageAggregates,
     `${childContext.childId}_${session.dateKey}`,
   );
   const aggregateUpdate = {
@@ -210,12 +212,12 @@ const syncSessionToFirestore = async (session) => {
   aggregateUpdate[`apps.${session.packageName}.lastUsed`] = session.endTimeMs;
   aggregateUpdate[`hours.${session.hourBucket}`] = increment(session.durationMs);
 
-  await aggregateRef.set(aggregateUpdate, { merge: true });
+  await setDoc(aggregateRef, aggregateUpdate, { merge: true });
 
-  const appDocRef = collections.children
-    .doc(childContext.childId)
-    .collection('apps')
-    .doc(session.packageName);
+  const appDocRef = doc(
+    collection(doc(collections.children, childContext.childId), 'apps'),
+    session.packageName,
+  );
   const usageMinutesIncrement = session.durationMs / 60000;
   const childAppUpdate = {
     name: session.appName,
@@ -224,12 +226,13 @@ const syncSessionToFirestore = async (session) => {
     isBlocked: false,
     updatedAt: serverTimestamp(),
   };
-  await appDocRef.set(childAppUpdate, { merge: true });
+  await setDoc(appDocRef, childAppUpdate, { merge: true });
 };
 
 const updateDeviceCurrentApp = async (appInfo) => {
   const deviceId = await ensureDeviceId();
-  await collections.devices.doc(deviceId).set(
+  await setDoc(
+    doc(collections.devices, deviceId),
     {
       currentApp: appInfo
         ? {

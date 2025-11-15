@@ -1,4 +1,5 @@
 import { NativeModules, Platform } from 'react-native';
+import { collection, doc, onSnapshot } from '@react-native-firebase/firestore';
 import { subscribeToAppControls } from './appControlsService';
 import { setUsageTimezone, subscribeToLocalUsageState } from './appUsageService';
 import { collections, serverTimestamp } from '../config/firebase';
@@ -61,6 +62,28 @@ const resetState = () => {
   remoteAppBlocks = new Map();
   remoteBlockConfirmations = new Map();
   lastEnforcementMethod = TELEMETRY_UNKNOWN_METHOD;
+};
+
+const resolveChildAppsRef = (childId) => {
+  if (!childId) {
+    return null;
+  }
+  const childDocRef =
+    typeof collections.children?.doc === 'function'
+      ? collections.children.doc(childId)
+      : doc(collections.children, childId);
+
+  if (typeof childDocRef?.collection === 'function') {
+    return childDocRef.collection('apps');
+  }
+  return collection(childDocRef, 'apps');
+};
+
+const attachSnapshot = (ref, onNext, onError) => {
+  if (typeof ref?.onSnapshot === 'function') {
+    return ref.onSnapshot(onNext, onError);
+  }
+  return onSnapshot(ref, onNext, onError);
 };
 
 const hashPayload = (payload) => JSON.stringify(payload);
@@ -141,10 +164,13 @@ const subscribeToRemoteAppStatus = (childId) => {
   }
 
   try {
-    const childDocRef = collections.children.doc(childId);
-    const appsRef = childDocRef.collection('apps');
+    const appsRef = resolveChildAppsRef(childId);
+    if (!appsRef) {
+      return () => {};
+    }
 
-    return appsRef.onSnapshot(
+    return attachSnapshot(
+      appsRef,
       (snapshot) => {
         const next = new Map();
         snapshot.forEach((doc) => {

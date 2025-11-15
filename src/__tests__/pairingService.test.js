@@ -1,4 +1,4 @@
-import { validateAndPairDevice } from '../services/pairingService';
+import { fetchExistingDevicePairing, validateAndPairDevice } from '../services/pairingService';
 
 // Helpers to build Firestore-like snapshots
 const makeDoc = (data = {}, id = 'doc-id') => ({
@@ -18,15 +18,9 @@ let mockDevicesDoc;
 let mockChildrenDoc;
 
 jest.mock('../config/firebase', () => {
-
   const serverTimestamp = jest.fn(() => 'server-ts');
 
-  const firestore = { FieldValue: { serverTimestamp: jest.fn(() => 'server-ts') } };
-
-
   const pairingCodes = {
-    where: jest.fn(() => pairingCodes),
-    limit: jest.fn(() => pairingCodes),
     get: jest.fn(async () => ({ empty: mockPairingDocs.length === 0, docs: mockPairingDocs })),
   };
 
@@ -39,15 +33,13 @@ jest.mock('../config/firebase', () => {
   const children = {
     add: mockChildrenAdd,
     doc: mockChildrenDoc,
-    where: jest.fn(() => children),
-    get: jest.fn(async () => ({ empty: true, docs: [] })),
-    limit: jest.fn(() => children),
   };
 
   mockDevicesDoc = jest.fn(() => ({
     set: jest.fn(async () => {}),
     get: jest.fn(async () => ({ exists: false })),
     ref: { update: jest.fn(async () => {}) },
+    update: jest.fn(async () => {}),
   }));
   const devices = { doc: mockDevicesDoc };
 
@@ -59,10 +51,23 @@ jest.mock('../config/firebase', () => {
     },
 
     serverTimestamp,
-
-    firestore,
-
   };
+});
+
+jest.mock('@react-native-firebase/firestore', () => {
+  const passthrough = {
+    limit: jest.fn((value) => ({ type: 'limit', value })),
+    where: jest.fn((field, op, value) => ({ type: 'where', field, op, value })),
+    query: jest.fn((collectionRef) => collectionRef),
+    getDocs: jest.fn(async (collectionRef) => collectionRef.get()),
+    doc: jest.fn((collectionRef, id) => collectionRef.doc(id)),
+    getDoc: jest.fn(async (docRef) => docRef.get()),
+    addDoc: jest.fn((collectionRef, data) => collectionRef.add(data)),
+    setDoc: jest.fn((docRef, data, options) => docRef.set(data, options)),
+    updateDoc: jest.fn((docRef, data) => docRef.update(data)),
+    collection: jest.fn(() => ({})),
+  };
+  return passthrough;
 });
 
 jest.mock('react-native-device-info', () => ({
@@ -201,6 +206,66 @@ describe('pairingService.validateAndPairDevice', () => {
 
   test('requires a pairing code', async () => {
     await expect(validateAndPairDevice()).rejects.toThrow(/Pairing code is required/);
+  });
+});
+
+describe('pairingService.fetchExistingDevicePairing', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('returns context when device document exists with child binding', async () => {
+    const deviceRef = {
+      set: jest.fn(),
+      get: jest.fn(async () => ({
+        exists: true,
+        data: () => ({
+          childId: 'child-restored',
+          parentId: 'parent-5',
+        }),
+      })),
+      update: jest.fn(async () => {}),
+      ref: { update: jest.fn(async () => {}) },
+    };
+    mockDevicesDoc.mockReturnValueOnce(deviceRef);
+
+    const result = await fetchExistingDevicePairing();
+
+    expect(result).toEqual({
+      success: true,
+      deviceId: 'device-123',
+      childId: 'child-restored',
+      childName: 'Child X',
+      parentId: 'parent-5',
+    });
+    expect(deviceRef.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isActive: true,
+      }),
+    );
+  });
+
+  test('returns null when device document missing or child binding absent', async () => {
+    const noDeviceRef = {
+      set: jest.fn(),
+      get: jest.fn(async () => ({ exists: false })),
+      update: jest.fn(async () => {}),
+      ref: { update: jest.fn(async () => {}) },
+    };
+    mockDevicesDoc.mockReturnValueOnce(noDeviceRef);
+    await expect(fetchExistingDevicePairing()).resolves.toBeNull();
+
+    const missingChildRef = {
+      set: jest.fn(),
+      get: jest.fn(async () => ({
+        exists: true,
+        data: () => ({}),
+      })),
+      update: jest.fn(async () => {}),
+      ref: { update: jest.fn(async () => {}) },
+    };
+    mockDevicesDoc.mockReturnValueOnce(missingChildRef);
+    await expect(fetchExistingDevicePairing()).resolves.toBeNull();
   });
 });
 

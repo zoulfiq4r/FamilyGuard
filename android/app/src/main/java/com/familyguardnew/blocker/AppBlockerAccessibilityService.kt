@@ -230,9 +230,5 @@ class AppBlockerAccessibilityService : AccessibilityService() {
   companion object {
     private const val TAG = "AppBlockerService"
     private const val FORCE_CLOSE_DEBOUNCE_MS = 1200L
-
-  companion object {
-    private const val TAG = "AppBlockerService"
-
   }
 }

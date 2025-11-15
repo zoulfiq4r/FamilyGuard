@@ -1,3 +1,4 @@
+import { collection, doc, getDocs, onSnapshot } from '@react-native-firebase/firestore';
 import { collections } from '../config/firebase';
 import { subscribeToLocalUsageState } from './appUsageService';
 
@@ -22,10 +23,7 @@ export const getChildApps = async (childId) => {
   }
 
   try {
-    const appsSnapshot = await collections.children
-      .doc(childId)
-      .collection('apps')
-      .get();
+    const appsSnapshot = await getDocs(collection(doc(collections.children, childId), 'apps'));
 
     const apps = [];
     appsSnapshot.forEach((doc) => {
@@ -62,32 +60,30 @@ export const subscribeToChildApps = (childId, callback) => {
     return () => {};
   }
 
-  const unsubscribe = collections.children
-    .doc(childId)
-    .collection('apps')
-    .onSnapshot(
-      (snapshot) => {
-        const apps = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data() || {};
-          const status = buildAppStatus(data);
-          apps.push({
-            packageName: doc.id,
-            appName: data.name || data.appName || doc.id,
-            usageMinutes: data.usageMinutes || 0,
-            isBlocked: status.isBlocked,
-            status,
-            updatedAt: data.updatedAt?.toDate?.()?.getTime?.() || null,
-          });
+  const unsubscribe = onSnapshot(
+    collection(doc(collections.children, childId), 'apps'),
+    (snapshot) => {
+      const apps = [];
+      snapshot.forEach((docSnapshot) => {
+        const data = docSnapshot.data() || {};
+        const status = buildAppStatus(data);
+        apps.push({
+          packageName: docSnapshot.id,
+          appName: data.name || data.appName || docSnapshot.id,
+          usageMinutes: data.usageMinutes || 0,
+          isBlocked: status.isBlocked,
+          status,
+          updatedAt: data.updatedAt?.toDate?.()?.getTime?.() || null,
         });
+      });
 
-        apps.sort((a, b) => a.appName.localeCompare(b.appName));
-        callback?.(apps);
-      },
-      (error) => {
-        console.error('Failed to listen to child apps', error);
-      },
-    );
+      apps.sort((a, b) => a.appName.localeCompare(b.appName));
+      callback?.(apps);
+    },
+    (error) => {
+      console.error('Failed to listen to child apps', error);
+    },
+  );
 
   return unsubscribe;
 };

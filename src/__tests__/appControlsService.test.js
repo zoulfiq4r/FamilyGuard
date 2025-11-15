@@ -94,7 +94,10 @@ describe('appControlsService', () => {
 
     handlers.success?.(
       makeSnapshot([
-        { id: 'meta', data: { globalDailyLimitMillis: '60000', graceMillis: '5000', timezone: 'UTC' } },
+        {
+          id: 'meta',
+          data: { globalDailyLimitMillis: '60000', graceMillis: '5000', timezone: 'UTC' },
+        },
         { id: 'com.app.one', data: { blocked: true, dailyLimitMillis: '90000' } },
       ]),
     );

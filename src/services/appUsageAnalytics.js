@@ -1,3 +1,13 @@
+import {
+  collection,
+  doc,
+  getDocs,
+  limit as limitQuery,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
+} from '@react-native-firebase/firestore';
 import { collections } from '../config/firebase';
 
 const toDateKey = (date) => {
@@ -37,8 +47,9 @@ export const listenToDailyUsageAggregate = (childId, dateKey, callback) => {
   if (!childId || !dateKey) {
     return () => {};
   }
-  const docRef = collections.appUsageAggregates.doc(`${childId}_${dateKey}`);
-  return docRef.onSnapshot(
+  const docRef = doc(collections.appUsageAggregates, `${childId}_${dateKey}`);
+  return onSnapshot(
+    docRef,
     (snapshot) => {
       if (!snapshot.exists) {
         callback?.({
@@ -72,13 +83,16 @@ export const listenToRecentSessions = (childId, dateKey, limit = 20, callback) =
   if (!childId || !dateKey) {
     return () => {};
   }
-  const query = collections.appUsageSessions
-    .where('childId', '==', childId)
-    .where('dateKey', '==', dateKey)
-    .orderBy('endTime', 'desc')
-    .limit(limit);
+  const sessionsQuery = query(
+    collections.appUsageSessions,
+    where('childId', '==', childId),
+    where('dateKey', '==', dateKey),
+    orderBy('endTime', 'desc'),
+    limitQuery(limit),
+  );
 
-  return query.onSnapshot(
+  return onSnapshot(
+    sessionsQuery,
     (snapshot) => {
       const sessions = [];
       snapshot.forEach((doc) => {
@@ -116,12 +130,14 @@ export const fetchUsageWindowSummary = async (childId, days) => {
   const startKey = toDateKey(startDate);
 
   try {
-    const snapshot = await collections.appUsageAggregates
-      .where('childId', '==', childId)
-      .where('dateKey', '>=', startKey)
-      .where('dateKey', '<=', endKey)
-      .orderBy('dateKey', 'desc')
-      .get();
+    const aggregatesQuery = query(
+      collections.appUsageAggregates,
+      where('childId', '==', childId),
+      where('dateKey', '>=', startKey),
+      where('dateKey', '<=', endKey),
+      orderBy('dateKey', 'desc'),
+    );
+    const snapshot = await getDocs(aggregatesQuery);
 
     const result = [];
     let totalDurationMs = 0;
@@ -156,7 +172,8 @@ export const listenToDeviceCurrentApp = (deviceId, callback) => {
   if (!deviceId) {
     return () => {};
   }
-  return collections.devices.doc(deviceId).onSnapshot(
+  return onSnapshot(
+    doc(collections.devices, deviceId),
     (snapshot) => {
       if (!snapshot.exists) {
         callback?.(null);

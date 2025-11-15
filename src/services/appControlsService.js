@@ -1,3 +1,4 @@
+import { deleteDoc, doc, getDocs } from '@react-native-firebase/firestore';
 import { db } from '../config/firebase';
 
 const defaultState = {
@@ -20,6 +21,15 @@ const toNumberOrNull = (value) => {
 const buildBasePath = (familyId, childId) =>
   `families/${familyId}/children/${childId}`;
 
+const resolveAppControlsCollection = (basePath) => db.collection(`${basePath}/appControls`);
+
+const resolveDocRef = (collectionRef, docId) => {
+  if (typeof collectionRef.doc === 'function') {
+    return collectionRef.doc(docId);
+  }
+  return doc(collectionRef, docId);
+};
+
 export const subscribeToAppControls = (familyId, childId, callback) => {
   if (!familyId || !childId) {
     console.warn('subscribeToAppControls missing identifiers', { familyId, childId });
@@ -27,7 +37,7 @@ export const subscribeToAppControls = (familyId, childId, callback) => {
   }
 
   const basePath = buildBasePath(familyId, childId);
-  const appControlsCollectionRef = db.collection(`${basePath}/appControls`);
+  const appControlsCollectionRef = resolveAppControlsCollection(basePath);
 
   let state = { ...defaultState };
 
@@ -73,7 +83,9 @@ export const subscribeToAppControls = (familyId, childId, callback) => {
 
 export const getAppControlsOnce = async (familyId, childId) => {
   const basePath = buildBasePath(familyId, childId);
-  const collectionSnapshot = await db.collection(`${basePath}/appControls`).get();
+  const collectionRef = resolveAppControlsCollection(basePath);
+  const collectionSnapshot =
+    typeof collectionRef.get === 'function' ? await collectionRef.get() : await getDocs(collectionRef);
 
   const state = {
     meta: { ...defaultState.meta },
@@ -106,7 +118,8 @@ export const setAppBlocked = async (familyId, childId, packageName, blocked) => 
   }
 
   const basePath = buildBasePath(familyId, childId);
-  const appControlRef = db.collection(`${basePath}/appControls`).doc(packageName);
+  const collectionRef = resolveAppControlsCollection(basePath);
+  const appControlRef = resolveDocRef(collectionRef, packageName);
 
   try {
     await appControlRef.set(
@@ -129,7 +142,8 @@ export const setAppDailyLimit = async (familyId, childId, packageName, dailyLimi
   }
 
   const basePath = buildBasePath(familyId, childId);
-  const appControlRef = db.collection(`${basePath}/appControls`).doc(packageName);
+  const collectionRef = resolveAppControlsCollection(basePath);
+  const appControlRef = resolveDocRef(collectionRef, packageName);
 
   try {
     const update = {};
@@ -154,10 +168,15 @@ export const removeAppControl = async (familyId, childId, packageName) => {
   }
 
   const basePath = buildBasePath(familyId, childId);
-  const appControlRef = db.collection(`${basePath}/appControls`).doc(packageName);
+  const collectionRef = resolveAppControlsCollection(basePath);
+  const appControlRef = resolveDocRef(collectionRef, packageName);
 
   try {
-    await appControlRef.delete();
+    if (typeof appControlRef.delete === 'function') {
+      await appControlRef.delete();
+    } else {
+      await deleteDoc(appControlRef);
+    }
     console.log('✅ App control removed:', packageName);
     return true;
   } catch (error) {
