@@ -3,15 +3,24 @@
 
 jest.mock('@react-native-firebase/app', () => {
   const mockApp = { name: 'mock-app' };
-  const appFn = jest.fn(() => mockApp);
-  appFn.getApp = jest.fn(() => mockApp);
-  return appFn;
+  const defaultExport = jest.fn(() => mockApp);
+  const getApp = jest.fn(() => mockApp);
+  return {
+    __esModule: true,
+    default: defaultExport,
+    getApp,
+  };
 });
 
 jest.mock('@react-native-firebase/auth', () => {
   const authInstance = { currentUser: null };
-  const authFn = jest.fn(() => authInstance);
-  return authFn;
+  const defaultExport = jest.fn(() => authInstance);
+  const getAuth = jest.fn(() => authInstance);
+  return {
+    __esModule: true,
+    default: defaultExport,
+    getAuth,
+  };
 });
 
 jest.mock('@react-native-firebase/firestore', () => {
